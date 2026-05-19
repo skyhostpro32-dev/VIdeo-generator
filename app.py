@@ -1,21 +1,26 @@
 import streamlit as st
-import requests
-from PIL import Image
-from io import BytesIO
-import tempfile
-import cv2
+from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+import cv2
+import tempfile
 import os
+import textwrap
+import random
 
 # ---------------- PAGE CONFIG ----------------
 
-st.set_page_config(page_title="AI Text to Video", layout="centered")
+st.set_page_config(
+    page_title="Local AI Video Generator",
+    layout="centered"
+)
+
+# ---------------- CSS ----------------
 
 st.markdown("""
 <style>
 
 .stApp{
-    background: linear-gradient(135deg, #0f172a, #111827, #1e293b);
+    background: linear-gradient(135deg,#0f172a,#111827,#1e293b);
     color:white;
 }
 
@@ -27,7 +32,7 @@ h1{
 
 .stButton>button{
     width:100%;
-    background:linear-gradient(90deg, #f97316, #ef4444);
+    background:linear-gradient(90deg,#06b6d4,#3b82f6);
     color:white;
     border:none;
     border-radius:12px;
@@ -41,49 +46,120 @@ h1{
 
 # ---------------- TITLE ----------------
 
-st.title("🎬 AI Text → Video Generator")
-st.write("Creates simple AI-style videos from your prompt")
+st.title("🎬 Local AI Text → Video Generator")
+
+st.write("Generate animated videos without any API")
 
 # ---------------- INPUT ----------------
 
-prompt = st.text_area("Enter Video Prompt", height=150)
-duration = st.slider("Video Length (seconds)", 3, 10, 5)
+prompt = st.text_area(
+    "Enter Video Text",
+    height=150
+)
 
-# ---------------- FRAME GENERATOR ----------------
+duration = st.slider(
+    "Video Duration",
+    3,
+    10,
+    5
+)
 
-def generate_frame(prompt, i):
-    url = f"https://image.pollinations.ai/prompt/{prompt} scene {i}"
-    response = requests.get(url, timeout=60)
-    image = Image.open(BytesIO(response.content))
-    return image
-
-# ---------------- VIDEO CREATION ----------------
+# ---------------- VIDEO FUNCTION ----------------
 
 def create_video(prompt, duration):
 
+    width = 1280
+    height = 720
+    fps = 24
+
+    total_frames = duration * fps
+
     temp_dir = tempfile.mkdtemp()
-    frames = []
 
-    for i in range(duration):
-        img = generate_frame(prompt, i)
-
-        frame_path = os.path.join(temp_dir, f"frame_{i}.png")
-        img.save(frame_path)
-
-        frames.append(frame_path)
-
-    # read first frame for size
-    frame = cv2.imread(frames[0])
-    height, width, layers = frame.shape
-
-    video_path = os.path.join(temp_dir, "output.mp4")
+    video_path = os.path.join(
+        temp_dir,
+        "output.mp4"
+    )
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video = cv2.VideoWriter(video_path, fourcc, 1, (width, height))
 
-    for frame_path in frames:
-        img = cv2.imread(frame_path)
-        video.write(img)
+    video = cv2.VideoWriter(
+        video_path,
+        fourcc,
+        fps,
+        (width, height)
+    )
+
+    wrapped_text = textwrap.fill(
+        prompt,
+        width=30
+    )
+
+    try:
+        font = ImageFont.truetype(
+            "arial.ttf",
+            50
+        )
+    except:
+        font = ImageFont.load_default()
+
+    # ---------------- FRAMES ----------------
+
+    for frame_num in range(total_frames):
+
+        # gradient background
+        image = Image.new(
+            "RGB",
+            (width, height),
+            (15, 23, 42)
+        )
+
+        draw = ImageDraw.Draw(image)
+
+        for y in range(height):
+
+            r = int(15 + y * 0.03)
+            g = int(23 + y * 0.02)
+            b = int(42 + y * 0.05)
+
+            draw.line(
+                [(0, y), (width, y)],
+                fill=(r, g, b)
+            )
+
+        # ---------------- ANIMATION ----------------
+
+        x = 80 + int(
+            np.sin(frame_num * 0.05) * 40
+        )
+
+        y = 250 + int(
+            np.cos(frame_num * 0.03) * 20
+        )
+
+        # glow effect
+        draw.text(
+            (x+3, y+3),
+            wrapped_text,
+            font=font,
+            fill=(0,0,0)
+        )
+
+        # main text
+        draw.text(
+            (x, y),
+            wrapped_text,
+            font=font,
+            fill=(255,255,255)
+        )
+
+        # convert PIL → OpenCV
+        frame = cv2.cvtColor(
+            np.array(image),
+            cv2.COLOR_RGB2BGR
+        )
+
+        video.write(frame)
 
     video.release()
 
@@ -94,21 +170,28 @@ def create_video(prompt, duration):
 if st.button("🚀 Generate Video"):
 
     if prompt.strip() == "":
-        st.warning("Please enter a prompt")
+        st.warning("Please enter text")
 
     else:
-        with st.spinner("Creating AI video..."):
 
-            video_path = create_video(prompt, duration)
+        with st.spinner("Generating video..."):
 
-            st.success("✅ Video Generated Successfully!")
+            video_path = create_video(
+                prompt,
+                duration
+            )
+
+            st.success(
+                "✅ Video Generated Successfully!"
+            )
 
             st.video(video_path)
 
-            with open(video_path, "rb") as f:
+            with open(video_path, "rb") as file:
+
                 st.download_button(
                     "⬇ Download Video",
-                    data=f,
+                    data=file,
                     file_name="ai_video.mp4",
                     mime="video/mp4"
                 )
