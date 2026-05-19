@@ -1,5 +1,6 @@
 streamlit
 requests
-numpy
-pandas
+Pillow
 moviepy
+numpy
+imageio-ffmpeg
