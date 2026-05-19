@@ -1,7 +1,4 @@
 streamlit
-openai
-PyPDF2
-python-docx
+requests
+numpy
 pandas
-plotly
-spacy
