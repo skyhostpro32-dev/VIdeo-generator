@@ -2,15 +2,12 @@ import streamlit as st
 import requests
 from PIL import Image
 from io import BytesIO
+import tempfile
+from moviepy.editor import ImageClip, concatenate_videoclips
 
-# ---------------- PAGE CONFIG ----------------
+# ---------------- PAGE ----------------
 
-st.set_page_config(
-    page_title="AI Text to Image Generator",
-    layout="centered"
-)
-
-# ---------------- UI DESIGN ----------------
+st.set_page_config(page_title="AI Text to Video", layout="centered")
 
 st.markdown("""
 <style>
@@ -28,7 +25,7 @@ h1{
 
 .stButton>button{
     width:100%;
-    background:linear-gradient(90deg, #22c55e, #06b6d4);
+    background:linear-gradient(90deg, #f97316, #ef4444);
     color:white;
     border:none;
     border-radius:12px;
@@ -42,55 +39,67 @@ h1{
 
 # ---------------- TITLE ----------------
 
-st.title("🎨 AI Text → Image Generator")
-st.write("Turn your prompt into a real AI image instantly")
+st.title("🎬 AI Text → Video Generator")
+st.write("Create short AI videos from text prompts")
 
 # ---------------- INPUT ----------------
 
-prompt = st.text_area("Enter your prompt", height=150)
+prompt = st.text_area("Enter Video Prompt", height=150)
 
-# ---------------- IMAGE GENERATION FUNCTION ----------------
+duration = st.slider("Video Duration (seconds)", 3, 10, 5)
 
-def generate_image(prompt):
-    url = f"https://image.pollinations.ai/prompt/{prompt}"
+# ---------------- FRAME GENERATION ----------------
 
-    try:
-        response = requests.get(url, timeout=60)
+def generate_frame(prompt, i):
+    url = f"https://image.pollinations.ai/prompt/{prompt} scene {i}"
 
-        if response.status_code == 200:
-            return Image.open(BytesIO(response.content))
-        else:
-            st.error("Failed to generate image. Try again.")
-            return None
+    response = requests.get(url)
+    return Image.open(BytesIO(response.content))
 
-    except Exception as e:
-        st.error(f"Error: {e}")
-        return None
+# ---------------- VIDEO GENERATION ----------------
 
-# ---------------- GENERATE BUTTON ----------------
+def create_video(prompt, duration):
 
-if st.button("🚀 Generate Image"):
+    clips = []
+
+    for i in range(duration):
+
+        img = generate_frame(prompt, i)
+
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        img.save(temp_file.name)
+
+        clip = ImageClip(temp_file.name).set_duration(1)
+        clips.append(clip)
+
+    video = concatenate_videoclips(clips, method="compose")
+
+    output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4").name
+
+    video.write_videofile(output, fps=24, codec="libx264", audio=False)
+
+    return output
+
+# ---------------- BUTTON ----------------
+
+if st.button("🚀 Generate Video"):
 
     if prompt.strip() == "":
         st.warning("Please enter a prompt")
 
     else:
-        with st.spinner("Generating AI image..."):
+        with st.spinner("Creating AI video..."):
 
-            image = generate_image(prompt)
+            video_path = create_video(prompt, duration)
 
-            if image:
-                st.success("✅ Image Generated Successfully!")
-                st.image(image, use_container_width=True)
+            st.success("✅ Video Generated!")
 
-                # ---------------- DOWNLOAD ----------------
-                buf = BytesIO()
-                image.save(buf, format="PNG")
-                byte_im = buf.getvalue()
+            st.video(video_path)
 
+            with open(video_path, "rb") as f:
                 st.download_button(
-                    "⬇ Download Image",
-                    data=byte_im,
-                    file_name="ai_image.png",
-                    mime="image/png"
+                    "⬇ Download Video",
+                    data=f,
+                    file_name="ai_video.mp4",
+                    mime="video/mp4"
                 )
