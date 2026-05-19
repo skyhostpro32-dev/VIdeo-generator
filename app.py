@@ -3,9 +3,11 @@ import requests
 from PIL import Image
 from io import BytesIO
 import tempfile
-from moviepy.editor import ImageClip, concatenate_videoclips
+import cv2
+import numpy as np
+import os
 
-# ---------------- PAGE ----------------
+# ---------------- PAGE CONFIG ----------------
 
 st.set_page_config(page_title="AI Text to Video", layout="centered")
 
@@ -40,45 +42,52 @@ h1{
 # ---------------- TITLE ----------------
 
 st.title("🎬 AI Text → Video Generator")
-st.write("Create short AI videos from text prompts")
+st.write("Creates simple AI-style videos from your prompt")
 
 # ---------------- INPUT ----------------
 
 prompt = st.text_area("Enter Video Prompt", height=150)
+duration = st.slider("Video Length (seconds)", 3, 10, 5)
 
-duration = st.slider("Video Duration (seconds)", 3, 10, 5)
-
-# ---------------- FRAME GENERATION ----------------
+# ---------------- FRAME GENERATOR ----------------
 
 def generate_frame(prompt, i):
     url = f"https://image.pollinations.ai/prompt/{prompt} scene {i}"
+    response = requests.get(url, timeout=60)
+    image = Image.open(BytesIO(response.content))
+    return image
 
-    response = requests.get(url)
-    return Image.open(BytesIO(response.content))
-
-# ---------------- VIDEO GENERATION ----------------
+# ---------------- VIDEO CREATION ----------------
 
 def create_video(prompt, duration):
 
-    clips = []
+    temp_dir = tempfile.mkdtemp()
+    frames = []
 
     for i in range(duration):
-
         img = generate_frame(prompt, i)
 
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        img.save(temp_file.name)
+        frame_path = os.path.join(temp_dir, f"frame_{i}.png")
+        img.save(frame_path)
 
-        clip = ImageClip(temp_file.name).set_duration(1)
-        clips.append(clip)
+        frames.append(frame_path)
 
-    video = concatenate_videoclips(clips, method="compose")
+    # read first frame for size
+    frame = cv2.imread(frames[0])
+    height, width, layers = frame.shape
 
-    output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4").name
+    video_path = os.path.join(temp_dir, "output.mp4")
 
-    video.write_videofile(output, fps=24, codec="libx264", audio=False)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    video = cv2.VideoWriter(video_path, fourcc, 1, (width, height))
 
-    return output
+    for frame_path in frames:
+        img = cv2.imread(frame_path)
+        video.write(img)
+
+    video.release()
+
+    return video_path
 
 # ---------------- BUTTON ----------------
 
@@ -92,7 +101,7 @@ if st.button("🚀 Generate Video"):
 
             video_path = create_video(prompt, duration)
 
-            st.success("✅ Video Generated!")
+            st.success("✅ Video Generated Successfully!")
 
             st.video(video_path)
 
